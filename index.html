@@ -75,7 +75,18 @@
 
     // Audio (persistent context + iOS unlock)
     const AudioCtx=window.AudioContext||window.webkitAudioContext; const audio=new AudioCtx(); let soundEnabled=true;
-    function unlockAudio(){ if(audio && audio.state==='suspended'){ audio.resume(); } }
+    // iOS hard-unlock: resume context and play a 0-volume tick on first gesture
+    function unlockAudio(){
+      try{
+        if(audio.state!=='running') audio.resume();
+        const buffer = audio.createBuffer(1, 1, audio.sampleRate);
+        const src = audio.createBufferSource();
+        src.buffer = buffer;
+        const g = audio.createGain(); g.gain.value = 0; // silent
+        src.connect(g).connect(audio.destination);
+        src.start(0);
+      }catch(e){ /* noop */ }
+    }
     document.addEventListener('touchstart', unlockAudio, { once: true, passive: true });
     document.addEventListener('mousedown', unlockAudio, { once: true });
 
@@ -145,18 +156,18 @@
 
     // Input & bite
     let lastInputAt=0; const DOUBLE_MS=360, BITE_WINDOW=300, BITE_COOLDOWN=280;
-    function onPrimaryInput(){ const t=now(); if(t-lastInputAt<DOUBLE_MS){ tryBite(); lastInputAt=0; } else { flap(); lastInputAt=t; } }
+    function onPrimaryInput(){ unlockAudio(); const t=now(); if(t-lastInputAt<DOUBLE_MS){ tryBite(); lastInputAt=0; } else { flap(); lastInputAt=t; } }
     function tryBite(){ if(state!==State.PLAY) return; if(bird.biteCooldown>0) return; bird.bite=true; bird.biteT=BITE_WINDOW; bird.biteCooldown=BITE_COOLDOWN; biteBleep(); }
 
     pauseBtn.addEventListener('click',()=>{ if(state===State.PAUSE){ state=State.PLAY; pauseBtn.textContent='⏸︎ Pause'; audio.resume(); } else if(state===State.PLAY){ state=State.PAUSE; pauseBtn.textContent='▶︎ Play'; } });
     muteBtn.addEventListener('click',()=>{ soundEnabled=!soundEnabled; muteBtn.textContent = soundEnabled? '🔊 Sound':'🔇 Muted'; });
     resetBtn.addEventListener('click',()=>resetGame());
 
-    startBtn.addEventListener('click',()=>{ unlockAudio(); levelIndex=parseInt(diffSelect.value,10)||0; autoLevel=!!autoChk.checked; applyLevel(levelIndex); state=State.PLAY; titleWrap.style.display='none'; audio.resume?.(); });
+    startBtn.addEventListener('click',()=>{ unlockAudio(); /* ensure running */ levelIndex=parseInt(diffSelect.value,10)||0; autoLevel=!!autoChk.checked; applyLevel(levelIndex); state=State.PLAY; titleWrap.style.display='none'; audio.resume?.(); });
 
-    window.addEventListener('keydown',(e)=>{ if(e.code==='Space'){ e.preventDefault(); onPrimaryInput(); } if(e.key==='p'||e.key==='P'){ if(state===State.PLAY){ state=State.PAUSE; pauseBtn.textContent='▶︎ Play'; } else if(state===State.PAUSE){ state=State.PLAY; pauseBtn.textContent='⏸︎ Pause'; audio.resume(); } } if(e.key==='m'||e.key==='M'){ soundEnabled=!soundEnabled; muteBtn.textContent = soundEnabled? '🔊 Sound':'🔇 Muted'; } if(e.key==='r'||e.key==='R'){ resetGame(); } });
-    canvas.addEventListener('mousedown',(e)=>{ e.preventDefault(); onPrimaryInput(); }, {passive:false});
-    canvas.addEventListener('touchstart',(e)=>{ e.preventDefault(); onPrimaryInput(); }, {passive:false});
+    window.addEventListener('keydown',(e)=>{ if(e.code==='Space'){ e.preventDefault(); unlockAudio(); onPrimaryInput(); } if(e.key==='p'||e.key==='P'){ if(state===State.PLAY){ state=State.PAUSE; pauseBtn.textContent='▶︎ Play'; } else if(state===State.PAUSE){ state=State.PLAY; pauseBtn.textContent='⏸︎ Pause'; audio.resume(); } } if(e.key==='m'||e.key==='M'){ soundEnabled=!soundEnabled; muteBtn.textContent = soundEnabled? '🔊 Sound':'🔇 Muted'; } if(e.key==='r'||e.key==='R'){ resetGame(); } });
+    canvas.addEventListener('mousedown',(e)=>{ e.preventDefault(); unlockAudio(); onPrimaryInput(); }, {passive:false});
+    canvas.addEventListener('touchstart',(e)=>{ e.preventDefault(); unlockAudio(); onPrimaryInput(); }, {passive:false});
 
     // Drawing
     function drawBackground(){ const grd=ctx.createLinearGradient(0,0,0,H); grd.addColorStop(0,theme.skyTop); grd.addColorStop(1,theme.skyBottom); ctx.fillStyle=grd; ctx.fillRect(0,0,W,H); }
